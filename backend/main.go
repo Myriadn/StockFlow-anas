@@ -7,6 +7,7 @@ import (
 	"stackflow_anas/internal/config"
 	"stackflow_anas/internal/data"
 	"stackflow_anas/internal/data/repository"
+	"stackflow_anas/internal/usecase"
 	"stackflow_anas/internal/wire"
 )
 
@@ -20,9 +21,11 @@ func main() {
 	defer pool.Close()
 
 	productRepo := repository.NewProductRepo(pool)
+	productUC := usecase.NewProductUsecase(productRepo, pool)
 
 	router := wire.NewRouter(wire.Handlers{
-		ProductRepo: productRepo,
+		ProductUsecase: productUC,
+		ProductRepo:    productRepo,
 	})
 
 	cmd.StartServer(router, cfg.Port)
