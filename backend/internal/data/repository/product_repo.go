@@ -10,6 +10,12 @@ type ProductRepo struct {
 	pool data.Querier
 }
 
+type ProductForOrder struct {
+	SKU   string
+	Price int
+	Stock int
+}
+
 func NewProductRepo(pool data.Querier) *ProductRepo {
 	return &ProductRepo{pool: pool}
 }
@@ -120,5 +126,53 @@ func (r *ProductRepo) InsertMovement(ctx context.Context, q data.Querier, produc
 	_, err := q.Exec(ctx,
 		`INSERT INTO stock_movements (product_id, type, qty, note) VALUES ($1,$2,$3,$4)`,
 		productID, typ, qty, note)
+	return err
+}
+
+func (r *ProductRepo) GetBySKUs(ctx context.Context, q data.Querier, skus []string) (map[string]ProductForOrder, error) {
+	const sql = `SELECT sku, price, stock FROM products WHERE sku = ANY($1)`
+	rows, err := q.Query(ctx, sql, skus)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := make(map[string]ProductForOrder)
+	for rows.Next() {
+		var p ProductForOrder
+		if err := rows.Scan(&p.SKU, &p.Price, &p.Stock); err != nil {
+			return nil, err
+		}
+		m[p.SKU] = p
+	}
+	return m, rows.Err()
+}
+
+// DecrementStockBySKU
+// guard atomic in WHERE, return price from the same row
+func (r *ProductRepo) DecrementStockBySKU(ctx context.Context, q data.Querier, sku string, qty int) (int, int, error) {
+	const sql = `UPDATE products SET stock = stock - $1
+	             WHERE sku = $2 AND stock >= $1
+	             RETURNING stock, price`
+	var newStock, price int
+	err := q.QueryRow(ctx, sql, qty, sku).Scan(&newStock, &price)
+	return newStock, price, err
+}
+
+func (r *ProductRepo) IncrementStockBySKU(ctx context.Context, q data.Querier, sku string, qty int) error {
+	_, err := q.Exec(ctx, `UPDATE products SET stock = stock + $1 WHERE sku=$2`, qty, sku)
+	return err
+}
+
+func (r *ProductRepo) GetStockBySKU(ctx context.Context, q data.Querier, sku string) (int, error) {
+	var s int
+	err := q.QueryRow(ctx, `SELECT stock FROM products WHERE sku=$1`, sku).Scan(&s)
+	return s, err
+}
+
+func (r *ProductRepo) InsertMovementBySKU(ctx context.Context, q data.Querier, sku, typ string, qty int, note string) error {
+	_, err := q.Exec(ctx,
+		`INSERT INTO stock_movements (product_id, type, qty, note)
+		 SELECT id, $1, $2, $3 FROM products WHERE sku=$4`,
+		typ, qty, note, sku)
 	return err
 }

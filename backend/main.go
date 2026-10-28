@@ -21,11 +21,15 @@ func main() {
 	defer pool.Close()
 
 	productRepo := repository.NewProductRepo(pool)
+	orderRepo := repository.NewOrderRepo(pool)
+
 	productUC := usecase.NewProductUsecase(productRepo, pool)
+	orderUC := usecase.NewOrderUsecase(orderRepo, productRepo, pool)
 
 	router := wire.NewRouter(wire.Handlers{
 		ProductUsecase: productUC,
 		ProductRepo:    productRepo,
+		OrderUsecase:   orderUC,
 	})
 
 	cmd.StartServer(router, cfg.Port)
