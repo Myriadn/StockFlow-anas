@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: stockflow_container
+    restart: always
+    environment:
+      POSTGRES_USER: stockflow
+      POSTGRES_PASSWORD: stockflow
+      POSTGRES_DB: db_stockflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - stockflow_pgdata:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stockflow -d db_stockflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  stockflow_pgdata:
