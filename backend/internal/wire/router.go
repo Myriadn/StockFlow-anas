@@ -23,5 +23,6 @@ func NewRouter(h Handlers) *gin.Engine {
 	r.POST("/api/products", adaptor.CreateProduct(h.ProductUsecase))
 	r.PUT("/api/products/:id", adaptor.UpdateProduct(h.ProductUsecase))
 	r.DELETE("/api/products/:id", adaptor.DeleteProduct(h.ProductUsecase))
+	r.POST("/api/products/:id/stock", adaptor.AdjustStock(h.ProductUsecase))
 	return r
 }

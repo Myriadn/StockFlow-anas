@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"errors"
-	"stackflow_anas/internal/data"
 	"stackflow_anas/internal/data/model"
 	"stackflow_anas/internal/data/repository"
 	"stackflow_anas/internal/dto"
@@ -11,14 +10,15 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ProductUsecase struct {
 	repo *repository.ProductRepo
-	pool data.Querier
+	pool *pgxpool.Pool
 }
 
-func NewProductUsecase(repo *repository.ProductRepo, pool data.Querier) *ProductUsecase {
+func NewProductUsecase(repo *repository.ProductRepo, pool *pgxpool.Pool) *ProductUsecase {
 	return &ProductUsecase{repo: repo, pool: pool}
 }
 
@@ -113,4 +113,41 @@ func toProductResponse(p model.Product) dto.ProductResponse {
 		ID: p.ID, SKU: p.SKU, Name: p.Name, Price: p.Price,
 		Stock: p.Stock, IsActive: p.IsActive, LastMovementAt: lma,
 	}
+}
+
+func (u *ProductUsecase) AdjustStock(ctx context.Context, id int, req dto.AdjustStockRequest) (*dto.AdjustStockResponse, error) {
+	delta := req.Qty
+	if req.Type == "out" {
+		delta = -req.Qty
+	}
+
+	tx, err := u.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	newStock, err := u.repo.AdjustStock(ctx, tx, id, delta)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			available, err2 := u.repo.GetStock(ctx, tx, id)
+			if errors.Is(err2, pgx.ErrNoRows) {
+				return nil, NewAppError(404, "PRODUCT_NOT_FOUND", nil)
+			}
+			if err2 != nil {
+				return nil, err2
+			}
+			return nil, NewAppError(409, "INSUFFICIENT_STOCK", map[string]any{"available": available})
+		}
+		return nil, err
+	}
+
+	if err := u.repo.InsertMovement(ctx, tx, id, req.Type, req.Qty, req.Note); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return &dto.AdjustStockResponse{ProductID: id, Stock: newStock, Type: req.Type, Qty: req.Qty}, nil
 }

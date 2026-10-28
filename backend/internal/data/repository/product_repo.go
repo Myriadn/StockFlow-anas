@@ -99,3 +99,26 @@ func (r *ProductRepo) HasMovements(ctx context.Context, q data.Querier, id int) 
 	err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM stock_movements WHERE product_id=$1)`, id).Scan(&exists)
 	return exists, err
 }
+
+// AdjustStock: guard atomic on WHERE
+func (r *ProductRepo) AdjustStock(ctx context.Context, q data.Querier, id, delta int) (int, error) {
+	const sql = `UPDATE products SET stock = stock + $1
+	             WHERE id = $2 AND stock + $1 >= 0
+	             RETURNING stock`
+	var newStock int
+	err := q.QueryRow(ctx, sql, delta, id).Scan(&newStock)
+	return newStock, err
+}
+
+func (r *ProductRepo) GetStock(ctx context.Context, q data.Querier, id int) (int, error) {
+	var s int
+	err := q.QueryRow(ctx, `SELECT stock FROM products WHERE id=$1`, id).Scan(&s)
+	return s, err
+}
+
+func (r *ProductRepo) InsertMovement(ctx context.Context, q data.Querier, productID int, typ string, qty int, note string) error {
+	_, err := q.Exec(ctx,
+		`INSERT INTO stock_movements (product_id, type, qty, note) VALUES ($1,$2,$3,$4)`,
+		productID, typ, qty, note)
+	return err
+}

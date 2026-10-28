@@ -34,3 +34,16 @@ type UpdateProductRequest struct {
 	Price    *int    `json:"price" binding:"omitempty,gte=0"`
 	IsActive *bool   `json:"is_active"`
 }
+
+type AdjustStockRequest struct {
+	Type string `json:"type" binding:"required,oneof=in out"`
+	Qty  int    `json:"qty"  binding:"required,gt=0"`
+	Note string `json:"note"`
+}
+
+type AdjustStockResponse struct {
+	ProductID int    `json:"product_id"`
+	Stock     int    `json:"stock"`
+	Type      string `json:"type"`
+	Qty       int    `json:"qty"`
+}

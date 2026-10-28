@@ -78,3 +78,23 @@ func DeleteProduct(uc *usecase.ProductUsecase) gin.HandlerFunc {
 		c.Status(http.StatusNoContent)
 	}
 }
+
+func AdjustStock(uc *usecase.ProductUsecase) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			return
+		}
+		var req dto.AdjustStockRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			Error(c, http.StatusBadRequest, "VALIDATION_ERROR", gin.H{"message": err.Error()})
+			return
+		}
+		resp, err := uc.AdjustStock(c.Request.Context(), id, req)
+		if err != nil {
+			respondErr(c, err)
+			return
+		}
+		Success(c, http.StatusOK, resp)
+	}
+}
