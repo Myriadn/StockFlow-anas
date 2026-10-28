@@ -147,8 +147,6 @@ func (r *ProductRepo) GetBySKUs(ctx context.Context, q data.Querier, skus []stri
 	return m, rows.Err()
 }
 
-// DecrementStockBySKU
-// guard atomic in WHERE, return price from the same row
 func (r *ProductRepo) DecrementStockBySKU(ctx context.Context, q data.Querier, sku string, qty int) (int, int, error) {
 	const sql = `UPDATE products SET stock = stock - $1
 	             WHERE sku = $2 AND stock >= $1
@@ -175,4 +173,23 @@ func (r *ProductRepo) InsertMovementBySKU(ctx context.Context, q data.Querier, s
 		 SELECT id, $1, $2, $3 FROM products WHERE sku=$4`,
 		typ, qty, note, sku)
 	return err
+}
+
+func (r *ProductRepo) ListMovements(ctx context.Context, q data.Querier, productID int) ([]model.StockMovement, error) {
+	const sql = `SELECT id, product_id, type, qty, note, created_at
+	             FROM stock_movements WHERE product_id=$1 ORDER BY created_at DESC, id DESC`
+	rows, err := q.Query(ctx, sql, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []model.StockMovement
+	for rows.Next() {
+		var m model.StockMovement
+		if err := rows.Scan(&m.ID, &m.ProductID, &m.Type, &m.Qty, &m.Note, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
 }

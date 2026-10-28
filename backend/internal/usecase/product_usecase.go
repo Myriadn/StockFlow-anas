@@ -151,3 +151,24 @@ func (u *ProductUsecase) AdjustStock(ctx context.Context, id int, req dto.Adjust
 	}
 	return &dto.AdjustStockResponse{ProductID: id, Stock: newStock, Type: req.Type, Qty: req.Qty}, nil
 }
+
+func (u *ProductUsecase) ListMovements(ctx context.Context, productID int) ([]dto.MovementResponse, error) {
+	if _, err := u.repo.GetByID(ctx, u.pool, productID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, NewAppError(404, "PRODUCT_NOT_FOUND", nil)
+		}
+		return nil, err
+	}
+	ms, err := u.repo.ListMovements(ctx, u.pool, productID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dto.MovementResponse, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, dto.MovementResponse{
+			ID: m.ID, Type: m.Type, Qty: m.Qty, Note: m.Note,
+			CreatedAt: m.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	return out, nil
+}

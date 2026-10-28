@@ -98,3 +98,19 @@ func AdjustStock(uc *usecase.ProductUsecase) gin.HandlerFunc {
 		Success(c, http.StatusOK, resp)
 	}
 }
+
+func ListMovements(uc *usecase.ProductUsecase) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil || id <= 0 {
+			Error(c, http.StatusBadRequest, "INVALID_ID", nil)
+			return
+		}
+		resp, err := uc.ListMovements(c.Request.Context(), id)
+		if err != nil {
+			respondErr(c, err)
+			return
+		}
+		Success(c, http.StatusOK, gin.H{"data": resp})
+	}
+}
