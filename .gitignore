@@ -1,0 +1,7 @@
+.vscode
+.direnv
+tmp/
+node_modules/
+.env
+*.log
+dist/
