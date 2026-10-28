@@ -2,10 +2,15 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"stackflow_anas/internal/data"
+	"stackflow_anas/internal/data/model"
 	"stackflow_anas/internal/data/repository"
 	"stackflow_anas/internal/dto"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type ProductUsecase struct {
@@ -40,16 +45,72 @@ func (u *ProductUsecase) List(ctx context.Context, q dto.ListProductsQuery) (*dt
 
 	data := make([]dto.ProductResponse, 0, len(products))
 	for _, p := range products {
-		var lma *string
-		if p.LastMovementAt != nil {
-			s := p.LastMovementAt.UTC().Format(time.RFC3339)
-			lma = &s
-		}
-		data = append(data, dto.ProductResponse{
-			ID: p.ID, SKU: p.SKU, Name: p.Name, Price: p.Price,
-			Stock: p.Stock, IsActive: p.IsActive, LastMovementAt: lma,
-		})
+		data = append(data, toProductResponse(p))
 	}
 
-	return &dto.ListProductsResponse{Data: data, Page: q.Page, Limit: q.Limit, Total: total}, nil
+	return &dto.ListProductsResponse{
+		Data:  data,
+		Page:  q.Page,
+		Limit: q.Limit,
+		Total: total,
+	}, nil
+}
+
+func (u *ProductUsecase) Create(ctx context.Context, req dto.CreateProductRequest) (*dto.ProductResponse, error) {
+	p, err := u.repo.Create(ctx, u.pool, req.SKU, req.Name, *req.Price)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, NewAppError(409, "SKU_ALREADY_EXISTS", map[string]any{"sku": req.SKU})
+		}
+		return nil, err
+	}
+	resp := toProductResponse(*p)
+	return &resp, nil
+}
+
+func (u *ProductUsecase) Update(ctx context.Context, id int, req dto.UpdateProductRequest) (*dto.ProductResponse, error) {
+	p, err := u.repo.Update(ctx, u.pool, id, req.SKU, req.Name, req.Price, req.IsActive)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, NewAppError(404, "PRODUCT_NOT_FOUND", nil)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, NewAppError(409, "SKU_ALREADY_EXISTS", map[string]any{"sku": *req.SKU})
+		}
+		return nil, err
+	}
+	resp := toProductResponse(*p)
+	return &resp, nil
+}
+
+func (u *ProductUsecase) Delete(ctx context.Context, id int) error {
+	rows, err := u.repo.Delete(ctx, u.pool, id)
+	if err != nil {
+		return err
+	}
+	if rows > 0 {
+		return nil
+	}
+	_, err = u.repo.GetByID(ctx, u.pool, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return NewAppError(404, "PRODUCT_NOT_FOUND", nil)
+	}
+	if err != nil {
+		return err
+	}
+	return NewAppError(409, "PRODUCT_HAS_HISTORY", nil)
+}
+
+func toProductResponse(p model.Product) dto.ProductResponse {
+	var lma *string
+	if p.LastMovementAt != nil {
+		s := p.LastMovementAt.UTC().Format(time.RFC3339)
+		lma = &s
+	}
+	return dto.ProductResponse{
+		ID: p.ID, SKU: p.SKU, Name: p.Name, Price: p.Price,
+		Stock: p.Stock, IsActive: p.IsActive, LastMovementAt: lma,
+	}
 }

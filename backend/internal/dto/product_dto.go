@@ -21,3 +21,16 @@ type ListProductsResponse struct {
 	Limit int               `json:"limit"`
 	Total int               `json:"total"`
 }
+
+type CreateProductRequest struct {
+	SKU   string `json:"sku" binding:"required"`
+	Name  string `json:"name" binding:"required"`
+	Price *int   `json:"price" binding:"required,gte=0"`
+}
+
+type UpdateProductRequest struct {
+	SKU      *string `json:"sku"`
+	Name     *string `json:"name"`
+	Price    *int    `json:"price" binding:"omitempty,gte=0"`
+	IsActive *bool   `json:"is_active"`
+}

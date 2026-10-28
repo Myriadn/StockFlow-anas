@@ -52,3 +52,50 @@ func (r *ProductRepo) Count(ctx context.Context, q data.Querier, search string) 
 	err := q.QueryRow(ctx, sql, search).Scan(&n)
 	return n, err
 }
+
+func (r *ProductRepo) GetByID(ctx context.Context, q data.Querier, id int) (*model.Product, error) {
+	const sql = `SELECT id, sku, name, price, stock, is_active, created_at FROM products WHERE id=$1`
+	var p model.Product
+	err := q.QueryRow(ctx, sql, id).Scan(&p.ID, &p.SKU, &p.Name, &p.Price, &p.Stock, &p.IsActive, &p.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *ProductRepo) Create(ctx context.Context, q data.Querier, sku, name string, price int) (*model.Product, error) {
+	const sql = `INSERT INTO products (sku, name, price) VALUES ($1,$2,$3)
+	             RETURNING id, sku, name, price, stock, is_active, created_at`
+	var p model.Product
+	err := q.QueryRow(ctx, sql, sku, name, price).Scan(&p.ID, &p.SKU, &p.Name, &p.Price, &p.Stock, &p.IsActive, &p.CreatedAt)
+	return &p, err
+}
+
+func (r *ProductRepo) Update(ctx context.Context, q data.Querier, id int, sku *string, name *string, price *int, isActive *bool) (*model.Product, error) {
+	const sql = `UPDATE products SET
+					sku = COALESCE($2, sku),
+	                name = COALESCE($3, name),
+	                price = COALESCE($4, price),
+	                is_active = COALESCE($5, is_active)
+	              WHERE id=$1
+	              RETURNING id, sku, name, price, stock, is_active, created_at`
+	var p model.Product
+	err := q.QueryRow(ctx, sql, id, sku, name, price, isActive).Scan(&p.ID, &p.SKU, &p.Name, &p.Price, &p.Stock, &p.IsActive, &p.CreatedAt)
+	return &p, err
+}
+
+func (r *ProductRepo) Delete(ctx context.Context, q data.Querier, id int) (int64, error) {
+	const sql = `DELETE FROM products WHERE id=$1
+	             AND NOT EXISTS (SELECT 1 FROM stock_movements WHERE product_id=$1)`
+	tag, err := q.Exec(ctx, sql, id)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+func (r *ProductRepo) HasMovements(ctx context.Context, q data.Querier, id int) (bool, error) {
+	var exists bool
+	err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM stock_movements WHERE product_id=$1)`, id).Scan(&exists)
+	return exists, err
+}

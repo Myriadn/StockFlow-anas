@@ -20,5 +20,8 @@ func NewRouter(h Handlers) *gin.Engine {
 
 	r.GET("/healthz", adaptor.Health(h.ProductRepo))
 	r.GET("/api/products", adaptor.ListProducts(h.ProductUsecase))
+	r.POST("/api/products", adaptor.CreateProduct(h.ProductUsecase))
+	r.PUT("/api/products/:id", adaptor.UpdateProduct(h.ProductUsecase))
+	r.DELETE("/api/products/:id", adaptor.DeleteProduct(h.ProductUsecase))
 	return r
 }
